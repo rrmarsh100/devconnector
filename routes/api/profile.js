@@ -3,6 +3,9 @@ const router = express.Router();
 const mongoose = require("mongoose");
 const passport = require("passport");
 
+// Load validation
+const validateProfileInput = require("../../validation/profile");
+
 // Load models
 const Profile = require("../../models/Profile");
 const User = require("../../models/User");
@@ -16,6 +19,7 @@ router.get(
     const errors = {};
 
     Profile.findOne({ user: req.user.id })
+      .populate("user", ["name", "avatar"])
       .then(profile => {
         if (!profile) {
           errors.noprofile = "There is no profile for this user";
@@ -27,10 +31,63 @@ router.get(
   }
 );
 
-router.get(
+router.get("/all", (req, res) => {
+  const errors = {};
+
+  Profile.find()
+    .populate("user", ["name", "avatar"])
+    .then(profiles => {
+      if (!profiles) {
+        errors.noprofile = "There are no profiles";
+        return res.status(404).json(errors);
+      }
+
+      res.json(profiles);
+    })
+    .catch(err => res.status(404).json({ profile: "There are no profiles" }));
+});
+
+router.get("/handle/:handle", (req, res) => {
+  const errors = {};
+
+  Profile.findOne({ handle: req.params.handle })
+    .populate("user", ["name", "avatar"])
+    .then(profile => {
+      if (!profile) {
+        errors.noprofile = "there is no profile for this user";
+        res.status(404).json(errors);
+      }
+      res.json(profile);
+    })
+    .catch(err => res.status(404).json(err));
+});
+
+router.get("/user/:user_id", (req, res) => {
+  const errors = {};
+
+  Profile.findOne({ user: req.params.user_id })
+    .populate("user", ["name", "avatar"])
+    .then(profile => {
+      if (!profile) {
+        errors.noprofile = "there is no profile for this user";
+        res.status(404).json(errors);
+      }
+      res.json(profile);
+    })
+    .catch(err =>
+      res.status(404).json({ profile: "There is no profile for this user" })
+    );
+});
+
+router.post(
   "/",
   passport.authenticate("jwt", { session: false }),
   (req, res) => {
+    const { errors, isValid } = validateProfileInput(req.body);
+    if (!isValid) {
+      return res.status(400).json(errors);
+    }
+
     // get fields
     const profileFields = {};
     profileFields.user = req.user.id;
@@ -56,7 +113,7 @@ router.get(
     if (req.body.linkedin) profileFields.social.linkedin = req.body.linkedin;
     if (req.body.instagram) profileFields.social.instagram = req.body.instagram;
 
-    profile.findOne({ user: req.user.id }).then(profile => {
+    Profile.findOne({ user: req.user.id }).then(profile => {
       if (profile) {
         Profile.findOneAndUpdate(
           { user: req.user.id },
